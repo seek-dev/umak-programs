@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>College & Program Selector</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f4f6f9; }
+    .card { background: #ffffff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: bold; margin-bottom: 8px; color: #2c3e50; }
+    select { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: #fff; }
+    select:disabled { background-color: #e9ecef; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>College & Program Selector</h2>
+
+    <!-- Dropdown 1 -->
+    <div class="form-group">
+      <label for="college">1. Select College:</label>
+      <select id="college" onchange="handleCollegeChange()">
+        <option value="">-- Loading Colleges... --</option>
+      </select>
+    </div>
+
+    <!-- Dropdown 2 -->
+    <div class="form-group">
+      <label id="dropdown2-label" for="dropdown2">2. Select Program / Sub Group:</label>
+      <select id="dropdown2" disabled>
+        <option value="">-- Select College First --</option>
+      </select>
+    </div>
+
+    <!-- Dropdown 3 (Only appears when sub_group values exist) -->
+    <div class="form-group" id="dropdown3-container" style="display: none;">
+      <label for="dropdown3">3. Select Program:</label>
+      <select id="dropdown3" disabled>
+        <option value="">-- Select Sub Group First --</option>
+      </select>
+    </div>
+  </div>
+
+  <script>
+    let rawPrograms = [];
+
+    // Safe extraction of sub_group string
+    function getSubgroup(item) {
+      if (!item) return null;
+      const val = item.sub_group || item.subgroup || item.sub_Group;
+      if (val && typeof val === 'string' && val.trim() !== '') {
+        return val.trim();
+      }
+      return null;
+    }
+
+    // 1. Load Colleges (Alphabetical by Name, formatted as [code] College Name)
+    document.addEventListener("DOMContentLoaded", async () => {
+      const collegeSelect = document.getElementById('college');
+      try {
+        const response = await fetch('/.netlify/functions/get-colleges');
+        const colleges = await response.json();
+
+        if (!Array.isArray(colleges) || colleges.length === 0) {
+          collegeSelect.innerHTML = '<option value="">No colleges found</option>';
+          return;
+        }
+
+        // Sort Colleges Alphabetically by Name
+        colleges.sort((a, b) => {
+          const nameA = a.name || a.college_name || a.title || "";
+          const nameB = b.name || b.college_name || b.title || "";
+          return nameA.localeCompare(nameB);
+        });
+
+        collegeSelect.innerHTML = '<option value="">-- Select College --</option>';
+        colleges.forEach(c => {
+          const rawCode = c.college_code || c.code || c.collegeCode || "";
+          const code = rawCode.trim().toUpperCase();
+          const name = (c.name || c.college_name || c.title || "College").trim();
+          
+          const option = document.createElement('option');
+          option.value = c.id || c.college_id;
+          
+          // Formats strictly as: [ccis] College Name
+          option.textContent = code ? `${code} (${name})` : name;
+          
+          collegeSelect.appendChild(option);
+        });
+      } catch (err) {
+        console.error('Error fetching colleges:', err);
+        collegeSelect.innerHTML = '<option value="">Error loading colleges</option>';
+      }
+    });
+
+    // 2. Handle College Selection
+    async function handleCollegeChange() {
+      const collegeId = document.getElementById('college').value;
+      const d2Label = document.getElementById('dropdown2-label');
+      const d2Select = document.getElementById('dropdown2');
+      const d3Container = document.getElementById('dropdown3-container');
+      const d3Select = document.getElementById('dropdown3');
+
+      // Reset dropdowns
+      d2Select.innerHTML = '<option value="">-- Select --</option>';
+      d3Select.innerHTML = '<option value="">-- Select Sub Group First --</option>';
+      d3Select.disabled = true;
+      d3Container.style.display = 'none';
+
+      if (!collegeId) {
+        d2Select.disabled = true;
+        return;
+      }
+
+      try {
+        const response = await fetch(`/.netlify/functions/get-programs?college_id=${collegeId}`);
+        rawPrograms = await response.json();
+
+        if (!Array.isArray(rawPrograms) || rawPrograms.length === 0) {
+          d2Select.innerHTML = '<option value="">No programs available</option>';
+          d2Select.disabled = true;
+          return;
+        }
+
+        const uniqueSubgroups = [...new Set(rawPrograms.map(getSubgroup).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b));
+
+        if (uniqueSubgroups.length > 0) {
+          // --- 3 DROPDOWNS MODE ---
+          d2Label.textContent = '2. Select Sub Group:';
+          d2Select.innerHTML = '<option value="">-- Select Sub Group --</option>';
+
+          uniqueSubgroups.forEach(sg => {
+            const option = document.createElement('option');
+            option.value = sg;
+            option.textContent = sg;
+            d2Select.appendChild(option);
+          });
+
+          d2Select.onchange = loadSubgroupPrograms;
+          d2Select.disabled = false;
+          d3Container.style.display = 'block';
+
+        } else {
+          // --- 2 DROPDOWNS MODE ---
+          d2Label.textContent = '2. Select Program:';
+          d2Select.innerHTML = '<option value="">-- Select Program --</option>';
+
+          const sortedPrograms = [...rawPrograms].sort((a, b) => 
+            (a.program || "").localeCompare(b.program || "")
+          );
+
+          sortedPrograms.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.program;
+            d2Select.appendChild(option);
+          });
+
+          d2Select.onchange = null;
+          d2Select.disabled = false;
+          d3Container.style.display = 'none';
+        }
+
+      } catch (err) {
+        console.error('Error fetching programs:', err);
+      }
+    }
+
+    // 3. Populate Dropdown 3
+    function loadSubgroupPrograms() {
+      const selectedSubgroup = document.getElementById('dropdown2').value;
+      const d3Select = document.getElementById('dropdown3');
+
+      d3Select.innerHTML = '<option value="">-- Select Program --</option>';
+
+      if (!selectedSubgroup) {
+        d3Select.disabled = true;
+        return;
+      }
+
+      const matches = rawPrograms
+        .filter(p => getSubgroup(p) === selectedSubgroup)
+        .sort((a, b) => (a.program || "").localeCompare(b.program || ""));
+
+      matches.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.program;
+        d3Select.appendChild(option);
+      });
+
+      d3Select.disabled = false;
+    }
+  </script>
+
+</body>
+</html>
