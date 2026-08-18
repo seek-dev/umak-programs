@@ -28,14 +28,15 @@ exports.handler = async (event) => {
     const supabase = createClient(url, key);
 
     const { data, error } = await supabase
-      .from('colleges')
-      .select('id, college_name, college_code');
+    .from('colleges')
+    .select('id, college_name, college_code')
+    .order('college_name', { ascending: true ;
 
     if (error) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: error.message })
+        body: JSON.stringify({ error: error.message });
       };
     }
 
