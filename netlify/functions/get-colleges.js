@@ -30,7 +30,7 @@ exports.handler = async (event) => {
     const { data, error } = await supabase
     .from('colleges')
     .select('id, college_name, college_code')
-    .order('college_name', { ascending: true ;
+    .order('college_name', { ascending: true}) ;
 
     if (error) {
       return {
