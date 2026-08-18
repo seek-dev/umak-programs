@@ -1,7 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -10,31 +8,47 @@ const headers = {
 };
 
 exports.handler = async (event) => {
-  // 1. Handle browser preflight OPTIONS request
+  // Handle preflight OPTIONS request
   if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
+  try {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: "Environment variables SUPABASE_URL or SUPABASE_ANON_KEY are missing on Netlify." })
+      };
+    }
+
+    const supabase = createClient(url, key);
+
+    const { data, error } = await supabase
+      .from('colleges')
+      .select('id, college_name, college_code');
+
+    if (error) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: error.message })
+      };
+    }
+
     return {
       statusCode: 200,
       headers,
-      body: ''
+      body: JSON.stringify(data)
     };
-  }
-
-  const { data, error } = await supabase
-    .from('colleges')
-    .select('id, college_name, college_code');
-
-  if (error) {
-    console.error('SUPABASE ERROR:', error);
-    return { 
-      statusCode: 500, 
+  } catch (err) {
+    return {
+      statusCode: 500,
       headers,
-      body: JSON.stringify({ error: error.message }) 
+      body: JSON.stringify({ error: err.message })
     };
   }
-
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify(data),
-  };
 };
