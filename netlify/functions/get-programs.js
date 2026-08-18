@@ -33,7 +33,8 @@ exports.handler = async (event) => {
   const { data, error } = await supabase
     .from('programs')
     .select('id, program, sub_group, college_id')
-    .eq('college_id', collegeId);
+    .eq('college_id', collegeId)
+    .order('program', { ascending: true });
 
   if (error) {
     console.error("SUPABASE ERROR ON GET-PROGRAMS:", error);
